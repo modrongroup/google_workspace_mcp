@@ -958,6 +958,42 @@ def _format_gmail_results_plain(
     return "\n".join(lines)
 
 
+def _normalize_search(folder: Optional[str], query: str) -> str:
+    """Normalize a search query with optional folder scoping.
+
+    Rewrites folder names into Gmail search operators so skill authors
+    don't need to memorize the Gmail DSL for folder scoping.
+
+    Portions derived from Mail-0/Zero (https://github.com/Mail-0/Zero) —
+    Copyright (c) 2025 Zero Email, MIT License
+    (apps/server/src/lib/driver/google.ts:1024-1042)
+    """
+    if not folder:
+        return query
+
+    folder_map = {
+        "inbox": "in:inbox",
+        "archive": "in:archive",
+        "trash": "in:trash",
+        "drafts": "is:draft",
+        "sent": "in:sent",
+        "spam": "in:spam",
+        "starred": "is:starred",
+        "unread": "is:unread",
+        "important": "is:important",
+    }
+
+    folder_lower = folder.lower()
+    if folder_lower not in folder_map:
+        valid = ", ".join(sorted(folder_map.keys()))
+        raise ValueError(f"Unknown folder '{folder}'. Valid folders: {valid}")
+
+    operator = folder_map[folder_lower]
+    if query.strip():
+        return f"{operator} AND ({query})"
+    return operator
+
+
 @server.tool()
 @handle_http_errors("search_gmail_messages", is_read_only=True, service_type="gmail")
 @require_google_service("gmail", "gmail_read")
@@ -965,6 +1001,7 @@ async def search_gmail_messages(
     service,
     query: str,
     user_google_email: str,
+    folder: Optional[str] = None,
     page_size: int = 10,
     page_token: Optional[str] = None,
 ) -> str:
@@ -976,6 +1013,7 @@ async def search_gmail_messages(
     Args:
         query (str): The search query. Supports standard Gmail search operators.
         user_google_email (str): The user's Google email address. Required.
+        folder (Optional[str]): Scope search to a folder: inbox, archive, trash, drafts, sent, spam, starred, unread, important.
         page_size (int): The maximum number of messages to return. Defaults to 10.
         page_token (Optional[str]): Token for retrieving the next page of results. Use the next_page_token from a previous response.
 
@@ -983,12 +1021,16 @@ async def search_gmail_messages(
         str: LLM-friendly structured results with Message IDs, Thread IDs, and clickable Gmail web interface URLs for each found message.
         Includes pagination token if more results are available.
     """
+    # Normalize query with folder scoping if provided
+    normalized_query = _normalize_search(folder, query)
+
     logger.info(
-        f"[search_gmail_messages] Email: '{user_google_email}', Query: '{query}', Page size: {page_size}"
+        f"[search_gmail_messages] Email: '{user_google_email}', Query: '{normalized_query}'"
+        f"{f' (folder: {folder})' if folder else ''}, Page size: {page_size}"
     )
 
     # Build the API request parameters
-    request_params = {"userId": "me", "q": query, "maxResults": page_size}
+    request_params = {"userId": "me", "q": normalized_query, "maxResults": page_size}
 
     # Add page token if provided
     if page_token:
