@@ -247,6 +247,9 @@ def _get_service_account_credentials(
         ) from e
 
 
+from auth.retry_proxy import inject_retry_proxy
+
+
 def _inject_quota_user(service, user_email):
     """Inject quotaUser on every Google API request for per-user quota attribution.
 
@@ -303,6 +306,7 @@ async def _authenticate_service(
         credentials = _get_service_account_credentials(resolved_scopes, canonical_email)
         service = build(service_name, service_version, credentials=credentials)
         service = _inject_quota_user(service, canonical_email)
+        service = inject_retry_proxy(service)
         logger.info(
             f"[{tool_name}] Authenticated {service_name} for "
             f"{canonical_email} via service-account (quotaUser={canonical_email})"
@@ -389,6 +393,7 @@ async def get_authenticated_google_service_oauth21(
 
         service = build(service_name, version, credentials=credentials)
         service = _inject_quota_user(service, resolved_email)
+        service = inject_retry_proxy(service)
         logger.info(
             f"[{tool_name}] Authenticated {service_name} for "
             f"{resolved_email} via oauth2.1 (quotaUser={resolved_email})"
@@ -423,6 +428,7 @@ async def get_authenticated_google_service_oauth21(
 
     service = build(service_name, version, credentials=credentials)
     service = _inject_quota_user(service, user_google_email)
+    service = inject_retry_proxy(service)
     logger.info(
         f"[{tool_name}] Authenticated {service_name} for "
         f"{user_google_email} via oauth2.1 (quotaUser={user_google_email})"

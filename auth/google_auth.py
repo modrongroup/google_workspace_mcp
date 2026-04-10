@@ -1196,9 +1196,11 @@ async def get_authenticated_google_service(
 
     try:
         from auth.service_decorator import _inject_quota_user
+        from auth.retry_proxy import inject_retry_proxy
 
         service = build(service_name, version, credentials=credentials)
         service = _inject_quota_user(service, user_google_email)
+        service = inject_retry_proxy(service)
         log_user_email = user_google_email
 
         # Try to get email from credentials if needed for validation
