@@ -14,6 +14,7 @@ from google.oauth2 import service_account as google_service_account
 from googleapiclient.discovery import build
 from fastmcp.server.dependencies import get_access_token, get_context
 from auth.google_auth import get_authenticated_google_service, GoogleAuthenticationError
+from auth.retry_proxy import inject_retry_proxy
 from core.config import USER_GOOGLE_EMAIL as _ENV_USER_EMAIL
 from auth.oauth21_session_store import (
     get_auth_provider,
@@ -247,9 +248,6 @@ def _get_service_account_credentials(
         ) from e
 
 
-from auth.retry_proxy import inject_retry_proxy
-
-
 def _inject_quota_user(service, user_email):
     """Inject quotaUser on every Google API request for per-user quota attribution.
 
@@ -263,6 +261,8 @@ def _inject_quota_user(service, user_email):
     (apps/server/src/lib/driver/google.ts:579-581)
     """
     if not user_email:
+        return service
+    if not hasattr(service, "_http") or not hasattr(service._http, "request"):
         return service
     original_request = service._http.request
     quoted_email = urllib.parse.quote(user_email)

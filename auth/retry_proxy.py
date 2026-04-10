@@ -35,6 +35,8 @@ def inject_retry_proxy(service, max_retries=DEFAULT_MAX_RETRIES):
     Returns:
         The same service object with its HTTP transport wrapped.
     """
+    if not hasattr(service, "_http") or not hasattr(service._http, "request"):
+        return service
     original_request = service._http.request
 
     def _retry_request(uri, method="GET", body=None, headers=None, **kwargs):
